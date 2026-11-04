@@ -1,0 +1,17 @@
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local datasets
+data/raw/
+data/processed/
+
+# Cache
+.pytest_cache/
