@@ -15,3 +15,5 @@ data/processed/
 
 # Cache
 .pytest_cache/
+
+data/chroma/
