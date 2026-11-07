@@ -1,0 +1,15 @@
+{"query_id": "q_6671", "source_issue_id": 6671, "query": "[AttributeError]: Module 'collections' has no attribute 'MutableMapping'", "relevant_issue_ids": [], "status": "needs_review", "judged_issue_ids": [6699, 6954, 7228, 7634]}
+{"query_id": "q_6676", "source_issue_id": 6676, "query": "Error in requests version 2.31.0  with urllib3 2.2.1 and 2.10 raise IncompleteRead(self._fp_bytes_read, self.length_remaining)", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6679", "source_issue_id": 6679, "query": "pytest.warns(None) is no longer supported", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6681", "source_issue_id": 6681, "query": "what if someone sets both data and files when making a request?", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6683", "source_issue_id": 6683, "query": "raise_for_status documentation is out of sync", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6686", "source_issue_id": 6686, "query": "Issue With Decimals In JSON Handling", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6689", "source_issue_id": 6689, "query": "Python hangs on import of the package", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6690", "source_issue_id": 6690, "query": "Upgrade idna to 3.7 for CVE-2024-3651", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6691", "source_issue_id": 6691, "query": "not support HTTP2 header", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6692", "source_issue_id": 6692, "query": "requests.request does not check method parameter", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6694", "source_issue_id": 6694, "query": "Support usage of PKCS#11 Hardware Security Modules where applicable", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6695", "source_issue_id": 6695, "query": "Session.verify ignored if REQUEST_CA_BUNDLES is set; behaviour not documented.", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6697", "source_issue_id": 6697, "query": "Can't access trailers with the Request library", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6699", "source_issue_id": 6699, "query": "AttributeError: 'NoneType' object has no attribute 'setdefault' on environment proxies", "relevant_issue_ids": [], "status": "unlabeled"}
+{"query_id": "q_6701", "source_issue_id": 6701, "query": "Connection problems", "relevant_issue_ids": [], "status": "unlabeled"}
