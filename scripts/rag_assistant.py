@@ -15,7 +15,7 @@ from scripts.build_vector_db import (
 from scripts.semantic_search import search as dense_search
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
