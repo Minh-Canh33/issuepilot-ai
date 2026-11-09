@@ -17,3 +17,8 @@ data/processed/
 .pytest_cache/
 
 data/chroma/
+
+# Local evaluation artifacts
+data/evaluation/labeling_pool.csv
+data/evaluation/benchmark_results.csv
+data/evaluation/latency_results.json
