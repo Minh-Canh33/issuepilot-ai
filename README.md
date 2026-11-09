@@ -1,3 +1,1137 @@
+# 🔎 IssuePilot AI
+
+**GitHub Issue Retrieval & RAG Assistant**
+
+IssuePilot AI is an AI engineering portfolio project that helps developers search for related GitHub issues and investigate technical problems using Retrieval-Augmented Generation (RAG).
+
+The system combines **TF-IDF keyword search**, **Sentence Transformer embeddings**, **ChromaDB vector search**, and **Google Gemini** to generate technical investigation suggestions grounded in real GitHub issue reports.
+
+It also provides a **FastAPI backend** and an interactive **Streamlit web interface**.
+
+**Repository:** https://github.com/Minh-Canh33/issuepilot-ai
+
+---
+
+## 1. Project Overview
+
+### Problem
+
+When developers encounter a bug, they often search GitHub for similar issues.
+
+However, traditional keyword-based search has limitations:
+
+- Different developers may describe the same problem using different terminology.
+- Exact keyword matches do not always indicate the same underlying bug.
+- Searching through many issues can be time-consuming.
+- Relevant information may be buried inside issue descriptions.
+
+### Solution
+
+IssuePilot AI combines lexical and semantic retrieval with an LLM-powered assistant.
+
+The system can:
+
+- Collect and normalize real GitHub issues.
+- Search using TF-IDF and semantic embeddings.
+- Retrieve potentially relevant historical issues.
+- Generate AI-assisted investigation suggestions.
+- Provide links to supporting GitHub issues.
+- Expose functionality through a REST API.
+- Offer a web interface for interactive use.
+
+**Important:** IssuePilot AI is an investigation assistant, not an automated bug fixer. AI-generated suggestions must be independently verified.
+
+---
+
+## 2. System Architecture
+
+```text
+                   GitHub REST API
+                          |
+                          v
+                 Issue Collection
+                          |
+                          v
+                 Data Processing
+                          |
+                          v
+                  JSONL Dataset
+                    300 Issues
+                          |
+               +----------+----------+
+               |                     |
+               v                     v
+         TF-IDF Search        Semantic Search
+          scikit-learn        Sentence Transformers
+               |                     |
+               |                 Embeddings
+               |                     |
+               |                     v
+               |                  ChromaDB
+               |                     |
+               +----------+----------+
+                          |
+                          v
+                  Top-K Related Issues
+                          |
+                          v
+                RAG Context Builder
+                Title + Body + URL
+                          |
+                          v
+                     Gemini API
+                          |
+                          v
+               Evidence-Grounded Answer
+                          |
+                          v
+                    FastAPI Backend
+                          |
+                          v
+                   Streamlit Web UI
+                          |
+                          v
+                   End User
+```
+
+The TF-IDF and dense retrieval methods can be benchmarked independently. The current RAG assistant uses dense retrieval to supply context to Gemini.
+
+---
+
+## 3. Technology Stack
+
+| Component               | Technology                          |
+| ----------------------- | ----------------------------------- |
+| Programming language    | Python 3.11                         |
+| Data collection         | GitHub REST API, HTTPX              |
+| Data processing         | pandas, JSONL                       |
+| Keyword retrieval       | scikit-learn, TF-IDF                |
+| Semantic embeddings     | Sentence Transformers               |
+| Embedding model         | `all-MiniLM-L6-v2`                |
+| Vector database         | ChromaDB                            |
+| LLM                     | Google Gemini API                   |
+| Backend                 | FastAPI, Uvicorn                    |
+| Frontend                | Streamlit                           |
+| Evaluation              | Recall@5, MRR@10, latency           |
+| Testing                 | pytest, FastAPI TestClient          |
+| Development environment | Windows, Python virtual environment |
+| Version control         | Git, GitHub                         |
+
+The application supports CPU-only execution.
+
+---
+
+## 4. Dataset
+
+The dataset contains **300 public GitHub issues** collected from the `psf/requests` repository.
+
+### Dataset Statistics
+
+| Metric              | Result |
+| ------------------- | -----: |
+| Total issues        |    300 |
+| Closed issues       |    263 |
+| Open issues         |     37 |
+| Duplicate issue IDs |      0 |
+| Missing titles      |      0 |
+| Missing bodies      |      0 |
+
+### Data Collection Pipeline
+
+The collection pipeline:
+
+1. Connects to the GitHub REST API.
+2. Retrieves issues using pagination.
+3. Excludes pull requests.
+4. Normalizes issue records.
+5. Saves processed records in JSONL format.
+6. Inspects the dataset for missing and duplicate values.
+
+Example issue fields:
+
+```json
+{
+  "issue_id": 7547,
+  "repository": "psf/requests",
+  "title": "Example issue title",
+  "body": "Example issue description",
+  "state": "open",
+  "url": "https://github.com/psf/requests/issues/7547"
+}
+```
+
+The record above illustrates the data structure; it is not a verbatim copy of issue #7547.
+
+### Dataset Location
+
+```text
+data/processed/issues.jsonl
+```
+
+The collected dataset is stored locally and is not required to be committed to GitHub.
+
+---
+
+## 5. Retrieval Methods
+
+### 5.1 TF-IDF Retrieval
+
+The baseline retrieval system uses `TfidfVectorizer` and cosine similarity.
+
+**Pipeline:**
+
+```text
+User Query
+    |
+    v
+TF-IDF Vectorizer
+    |
+    v
+Sparse Query Vector
+    |
+    v
+Cosine Similarity
+    |
+    v
+Top-K GitHub Issues
+```
+
+The initial TF-IDF representation contains **7,556 text features** for the 300-issue corpus.
+
+**Advantages:**
+
+- Fast on small datasets.
+- Computationally inexpensive.
+- Effective at matching exact technical terms, function names, and error messages.
+
+**Limitations:**
+
+- Depends on shared vocabulary.
+- Can miss semantically related issues expressed using different words.
+
+Run:
+
+```powershell
+python -m scripts.tfidf_search
+```
+
+### 5.2 Semantic Retrieval
+
+Semantic retrieval uses the Sentence Transformer model:
+
+`sentence-transformers/all-MiniLM-L6-v2`
+
+Each issue is embedded into a **384-dimensional vector**.
+
+The embedding input combines the title with a truncated issue description.
+
+```text
+Title: <issue title>
+Description: <issue body>
+```
+
+The embeddings are normalized and stored in ChromaDB using cosine distance.
+
+**Pipeline:**
+
+```text
+User Query
+    |
+    v
+Sentence Transformer
+    |
+    v
+384-D Query Embedding
+    |
+    v
+ChromaDB Vector Search
+    |
+    v
+Top-K GitHub Issues
+```
+
+Build the vector database:
+
+```powershell
+python -m scripts.build_vector_db
+```
+
+Run semantic retrieval:
+
+```powershell
+python -m scripts.semantic_search
+```
+
+**Advantages:**
+
+- Captures semantic relationships beyond exact keyword matches.
+- Can retrieve issues using related descriptions.
+
+**Limitations:**
+
+- Requires neural model inference.
+- Has greater CPU latency than TF-IDF in the current benchmark.
+- Semantic similarity does not guarantee two issues describe the same bug.
+
+TF-IDF similarity scores and dense retrieval scores are not directly comparable.
+
+---
+
+## 6. Retrieval Evaluation
+
+The project implements an evaluation pipeline for comparing retrieval methods.
+
+### Evaluation Dataset
+
+| Property              |                          Value |
+| --------------------- | -----------------------------: |
+| Evaluation queries    |                             15 |
+| Candidate issue pairs |                            256 |
+| Candidate sources     | TF-IDF Top-10 and Dense Top-10 |
+| Self-retrieval        |                       Excluded |
+| Relevance labels      |            `y`, `n`, `s` |
+
+Candidates from the two retrieval methods are merged and deduplicated.
+
+The relevance labels mean:
+
+| Label | Meaning                 |
+| ----- | ----------------------- |
+| `y` | Relevant to the query   |
+| `n` | Not relevant            |
+| `s` | Uncertain; needs review |
+
+### Retrieval Metrics
+
+**Pooled Recall@5**
+
+Measures the proportion of confirmed relevant issues in the candidate pool that appear among the top five retrieval results.
+
+```text
+Pooled Recall@5 =
+    Relevant issues retrieved in Top-5
+    ----------------------------------
+    All confirmed relevant issues in the pool
+```
+
+**MRR@10 — Mean Reciprocal Rank**
+
+Measures how highly the first relevant result appears within the first ten results.
+
+```text
+Reciprocal Rank = 1 / Rank of First Relevant Result
+```
+
+MRR@10 averages this value across evaluable queries.
+
+### Current Relevance Evaluation
+
+The evaluation code is implemented and runs successfully. However, the current pilot contains only **one completed query**.
+
+| Metric            | TF-IDF | Dense Retrieval |
+| ----------------- | -----: | --------------: |
+| Pooled Recall@5   | 1.0000 |          1.0000 |
+| MRR@10            | 1.0000 |          1.0000 |
+| Evaluated queries |      1 |               1 |
+
+These results are preliminary.
+
+The initial relevance labels included title-based suggestions that require further verification. Therefore, the current evaluation **cannot establish which retrieval method has better relevance quality**.
+
+The reported recall is pooled recall, not exhaustive recall across the entire issue corpus.
+
+Run the evaluation:
+
+```powershell
+python -m scripts.evaluate_retrieval
+```
+
+Evaluation output:
+
+```text
+data/evaluation/benchmark_results.csv
+```
+
+---
+
+## 7. Retrieval Latency Benchmark
+
+Both retrieval methods were benchmarked locally on CPU.
+
+### Benchmark Configuration
+
+| Parameter                 | Value      |
+| ------------------------- | ---------- |
+| Corpus size               | 300 issues |
+| Evaluation queries        | 15         |
+| Measured repetitions      | 10         |
+| Measured calls per method | 150        |
+| Warm-up calls             | 3          |
+| Retrieval depth           | Top-5      |
+| Hardware                  | Local CPU  |
+
+Model loading and index construction were excluded from the timing measurements.
+
+### Measured Results
+
+| Metric       |            TF-IDF | Dense Retrieval |
+| ------------ | ----------------: | --------------: |
+| Mean latency | **4.75 ms** |        37.92 ms |
+| P50 latency  | **4.73 ms** |        34.44 ms |
+| P95 latency  | **7.04 ms** |        59.52 ms |
+
+### Analysis
+
+TF-IDF achieved approximately **8× lower mean retrieval latency** than dense retrieval in the local benchmark.
+
+The semantic retrieval pipeline incurs additional computation from Sentence Transformer inference and ChromaDB search.
+
+These measurements demonstrate a speed trade-off, but the current relevance evaluation is not sufficient to establish an accuracy advantage for either method.
+
+Run the benchmark:
+
+```powershell
+python -m scripts.benchmark_latency
+```
+
+Output:
+
+```text
+data/evaluation/latency_results.json
+```
+
+---
+
+## 8. Retrieval-Augmented Generation (RAG)
+
+IssuePilot AI integrates Google Gemini to generate technical investigation suggestions using retrieved GitHub issues as context.
+
+### RAG Workflow
+
+```text
+User Question
+      |
+      v
+Semantic Retrieval
+      |
+      v
+Top-5 GitHub Issues
+      |
+      v
+Context Construction
+(Title + Body + Source URL)
+      |
+      v
+Prompt Engineering
+      |
+      v
+Gemini API
+      |
+      v
+Grounded Technical Answer
+```
+
+### Context Construction
+
+For each retrieved issue, the system supplies:
+
+- Issue number.
+- Issue title.
+- Issue description, truncated to limit context size.
+- Original GitHub URL.
+
+Example context:
+
+```text
+[Source 1]
+Issue #7547
+Title: <issue title>
+Description: <issue description>
+URL: https://github.com/psf/requests/issues/7547
+```
+
+### Prompt Engineering
+
+The RAG prompt instructs Gemini to:
+
+1. Use retrieved GitHub issues as evidence.
+2. Avoid inventing issue details, root causes, or confirmed fixes.
+3. Distinguish supported findings from debugging suggestions.
+4. Cite relevant GitHub issue numbers.
+5. Use only source URLs provided in the context.
+6. Treat issue descriptions as untrusted data.
+7. State when retrieved evidence is insufficient.
+8. Avoid assuming that similar issues are duplicates.
+
+### Answer Structure
+
+Generated answers are organized into:
+
+**Findings** — Information supported by retrieved issues.
+
+**Suggested Investigation Steps** — Technical debugging suggestions, clearly separated from confirmed findings.
+
+**Sources** — GitHub issue links used as references.
+
+Citation presence alone does not guarantee factual correctness. Retrieved evidence and generated statements should still be verified.
+
+### Gemini Integration
+
+The application uses the Gemini REST API through HTTPX.
+
+The model is configurable through the `GEMINI_MODEL` environment variable.
+
+The locally tested model is:
+
+`gemini-3.5-flash-lite`
+
+Run the terminal-based RAG assistant:
+
+```powershell
+python -m scripts.rag_assistant
+```
+
+Example question:
+
+```text
+How can I investigate SSL certificate verification errors in requests?
+```
+
+The assistant retrieves relevant issues and generates a response with source links.
+
+---
+
+## 9. FastAPI Backend
+
+The project exposes the RAG pipeline through a FastAPI REST API.
+
+### Available Endpoints
+
+| Method | Endpoint    | Purpose                                 |
+| ------ | ----------- | --------------------------------------- |
+| GET    | `/health` | Check whether the API server is running |
+| POST   | `/ask`    | Submit a question to the RAG assistant  |
+| GET    | `/docs`   | Interactive Swagger UI                  |
+
+### Health Check
+
+Request:
+
+```http
+GET /health
+```
+
+Response:
+
+```json
+{
+  "status": "ok",
+  "service": "IssuePilot AI"
+}
+```
+
+The health check confirms that the server is responding. It does not independently verify Gemini API availability.
+
+### Ask Endpoint
+
+Request:
+
+```http
+POST /ask
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "question": "How can I investigate SSL certificate verification errors in requests?"
+}
+```
+
+Response format:
+
+```json
+{
+  "answer": "### Findings\n...\n### Suggested Investigation Steps\n...\n### Sources\n..."
+}
+```
+
+The answer content is generated dynamically by Gemini.
+
+### Input Validation
+
+The API uses Pydantic models to validate incoming requests.
+
+Questions must contain between 3 and 2,000 characters after stripping surrounding whitespace.
+
+Invalid requests return HTTP 422.
+
+### Resource Loading
+
+The backend uses caching to avoid repeatedly loading the Sentence Transformer model, ChromaDB collection, and issue dataset for every request.
+
+### Error Handling
+
+The backend handles errors such as:
+
+- Invalid request data.
+- Gemini API HTTP failures.
+- Network connection failures.
+- Unexpected internal errors.
+
+Upstream Gemini failures are returned to clients as HTTP 502 without exposing the API key.
+
+### Run FastAPI
+
+```powershell
+python -m uvicorn api.main:app --reload --port 8000
+```
+
+Swagger UI:
+
+http://127.0.0.1:8000/docs
+
+Health endpoint:
+
+http://127.0.0.1:8000/health
+
+The `--reload` option is intended for local development.
+
+---
+
+## 10. Streamlit Web Interface
+
+IssuePilot AI includes a browser-based interface built with Streamlit.
+
+### Features
+
+- Technical question input.
+- **Analyze Issue** button.
+- Backend communication using HTTPX.
+- Loading indicator during generation.
+- Markdown rendering of the AI answer.
+- Clickable GitHub source links.
+- Validation and error messages.
+
+### Application Flow
+
+```text
+Browser
+   |
+   v
+Streamlit UI
+   |
+   | POST /ask
+   v
+FastAPI
+   |
+   v
+RAG Pipeline
+   |
+   v
+Gemini Response
+   |
+   v
+FastAPI JSON
+   |
+   v
+Streamlit Answer Display
+```
+
+The Streamlit application does not call Gemini directly. It communicates with FastAPI, keeping API credentials on the backend.
+
+### Run Streamlit
+
+With FastAPI already running, open a second terminal:
+
+```powershell
+python -m streamlit run app/streamlit_app.py
+```
+
+Open:
+
+http://localhost:8501
+
+### Example Usage
+
+1. Open the Streamlit web interface.
+2. Enter a question about a technical issue.
+3. Click **Analyze Issue**.
+4. Review the generated findings.
+5. Inspect suggested investigation steps.
+6. Open the linked GitHub issues to verify the evidence.
+
+Example question:
+
+```text
+How can I investigate SSL certificate verification errors in requests?
+```
+
+The Streamlit-to-FastAPI-to-Gemini workflow has been tested manually with a successful response.
+
+---
+
+## 11. Project Structure
+
+```text
+issuepilot-ai/
+|
+|-- api/
+|   |-- __init__.py
+|   |-- main.py
+|
+|-- app/
+|   |-- __init__.py
+|   |-- streamlit_app.py
+|
+|-- scripts/
+|   |-- collect_issues.py
+|   |-- inspect_dataset.py
+|   |-- tfidf_search.py
+|   |-- prepare_eval.py
+|   |-- label_issues.py
+|   |-- auto_label.py
+|   |-- build_vector_db.py
+|   |-- semantic_search.py
+|   |-- build_eval_pool.py
+|   |-- evaluate_retrieval.py
+|   |-- benchmark_latency.py
+|   |-- check_gemini.py
+|   |-- check_gemini_rest.py
+|   |-- rag_assistant.py
+|
+|-- tests/
+|   |-- test_pipeline.py
+|   |-- test_tfidf.py
+|   |-- test_semantic_search.py
+|   |-- test_rag.py
+|   |-- test_api.py
+|
+|-- data/
+|   |-- processed/
+|   |   |-- issues.jsonl
+|   |
+|   |-- evaluation/
+|   |   |-- queries.jsonl
+|   |   |-- labeling_pool.csv
+|   |   |-- benchmark_results.csv
+|   |   |-- latency_results.json
+|   |
+|   |-- chroma/
+|
+|-- .env.example
+|-- .gitignore
+|-- requirements.txt
+|-- README.md
+```
+
+Some data files, vector indexes, and local environment files are intentionally excluded from Git version control.
+
+---
+
+## 12. Installation
+
+### Prerequisites
+
+- Python 3.11
+- Git
+- Internet connection
+- Gemini API key
+- Windows PowerShell or an equivalent terminal
+
+A GPU is not required.
+
+### Step 1 — Clone Repository
+
+```powershell
+git clone https://github.com/Minh-Canh33/issuepilot-ai.git
+cd issuepilot-ai
+```
+
+### Step 2 — Create Virtual Environment
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### Step 3 — Install Dependencies
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### Step 4 — Configure Environment Variables
+
+Create a `.env` file in the repository root.
+
+Example:
+
+```dotenv
+GITHUB_OWNER=psf
+GITHUB_REPO=requests
+MAX_ISSUES=300
+MAX_PAGES=15
+GITHUB_TOKEN=
+
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+Replace `YOUR_GEMINI_API_KEY` with a valid API key.
+
+**Security:**
+
+- Never commit `.env`.
+- Never publish API keys in screenshots or logs.
+- Do not commit `.venv` or the local ChromaDB directory.
+- Revoke and rotate any exposed API key.
+
+---
+
+## 13. How to Run the Full Project
+
+Run the commands from the repository root.
+
+### Step 1 — Collect Issues
+
+```powershell
+python -m scripts.collect_issues
+```
+
+### Step 2 — Inspect Dataset
+
+```powershell
+python -m scripts.inspect_dataset
+```
+
+### Step 3 — Build the Vector Database
+
+```powershell
+python -m scripts.build_vector_db
+```
+
+### Step 4 — Test Semantic Search
+
+```powershell
+python -m scripts.semantic_search
+```
+
+### Step 5 — Test Gemini Connectivity
+
+```powershell
+python -m scripts.check_gemini_rest
+```
+
+### Step 6 — Start FastAPI
+
+**Terminal 1:**
+
+```powershell
+python -m uvicorn api.main:app --reload --port 8000
+```
+
+Backend:
+
+http://127.0.0.1:8000
+
+### Step 7 — Start Streamlit
+
+**Terminal 2:**
+
+```powershell
+python -m streamlit run app/streamlit_app.py
+```
+
+Frontend:
+
+http://localhost:8501
+
+Both processes must remain running for the web application to work.
+
+### Step 8 — Use IssuePilot AI
+
+Open the frontend, enter a technical question, and select **Analyze Issue**.
+
+The backend retrieves relevant GitHub issues and calls Gemini to generate a grounded response.
+
+---
+
+## 14. Automated Testing
+
+The project includes automated tests for data processing, retrieval, RAG, and the API.
+
+### Test Coverage Areas
+
+| Test file                   | Focus                                                          |
+| --------------------------- | -------------------------------------------------------------- |
+| `test_pipeline.py`        | Dataset collection and processing                              |
+| `test_tfidf.py`           | Lexical retrieval                                              |
+| `test_semantic_search.py` | Dense retrieval                                                |
+| `test_rag.py`             | Context construction, prompt, mocked Gemini responses          |
+| `test_api.py`             | Health check, request validation, API response, backend errors |
+
+### RAG Tests
+
+Five RAG unit tests have passed.
+
+They cover:
+
+- Inclusion of issue descriptions in RAG context.
+- Prompt construction.
+- Parsing the Gemini response.
+- Using retrieved issues in the generated prompt.
+- Avoiding Gemini calls when no issues are retrieved.
+
+### FastAPI Tests
+
+Five API tests have passed.
+
+They cover:
+
+- Successful `/health` response.
+- Rejection of short questions.
+- Rejection of missing question fields.
+- Successful `/ask` response.
+- Handling internal backend failures.
+
+### Run Tests
+
+```powershell
+python -m pytest -q
+```
+
+Run the API tests separately:
+
+```powershell
+python -m pytest tests/test_api.py -v
+```
+
+The RAG and API unit tests use mocks, so they do not need to call Gemini for every test run.
+
+---
+
+## 15. Development Roadmap
+
+| Day   | Objective                                                                 | Status                                                   |
+| ----- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Day 1 | GitHub REST API collection and data normalization                         | Completed                                                |
+| Day 2 | TF-IDF retrieval baseline                                                 | Completed                                                |
+| Day 3 | Sentence Transformers and ChromaDB                                        | Completed                                                |
+| Day 4 | Retrieval evaluation and latency benchmarking                             | Implemented; relevance labels require further validation |
+| Day 5 | Gemini RAG pipeline with source grounding                                 | Completed                                                |
+| Day 6 | FastAPI backend and Streamlit web interface                               | Implemented and manually tested                          |
+| Day 7 | Final tests, evaluation improvements, documentation, and portfolio polish | Planned                                                  |
+
+---
+
+## 16. Current Limitations
+
+IssuePilot AI is a functional prototype with several limitations:
+
+- The dataset contains only 300 issues from one repository.
+- Retrieval relevance judgments are not yet sufficiently verified for a reliable comparison.
+- Dense retrieval requires additional CPU processing.
+- Retrieved issue content can contain incomplete or incorrect user reports.
+- Gemini can generate plausible but unsupported technical suggestions.
+- Source URLs are included in the response, but citations are not yet automatically verified against individual claims.
+- The current web application is intended for local development and demonstration.
+- Production authentication, rate limiting, deployment, and monitoring have not been implemented.
+
+The application should not be used to make security-sensitive or production debugging decisions without independent validation.
+
+---
+
+## 17. Future Improvements
+
+Potential improvements include:
+
+- Expanding and verifying the relevance evaluation dataset.
+- Adding hybrid TF-IDF + dense retrieval.
+- Introducing cross-encoder reranking.
+- Comparing title-only and title-plus-body embeddings.
+- Validating generated citations against retrieved source IDs.
+- Returning structured source metadata from FastAPI.
+- Evaluating response faithfulness and answer usefulness.
+- Adding caching and robust retry handling for transient API failures.
+- Improving the Streamlit interface.
+- Adding deployment configuration and monitoring.
+
+---
+
+## 18. Engineering Skills Demonstrated
+
+This project demonstrates practical experience with:
+
+- GitHub REST API integration.
+- Pagination and data normalization.
+- JSONL-based data pipelines.
+- TF-IDF and cosine similarity.
+- Neural sentence embeddings.
+- Vector databases and semantic retrieval.
+- Retrieval evaluation metrics.
+- CPU latency benchmarking.
+- Retrieval-Augmented Generation.
+- LLM prompt engineering and source grounding.
+- Gemini REST API integration.
+- FastAPI request validation and response handling.
+- Streamlit user-interface development.
+- Mock-based testing with pytest.
+- Git-based incremental development.
+
+The project also highlights an important engineering principle:
+
+**A working AI demo is not the same as a fully validated AI system.** Reliable evaluation, source verification, and transparent limitations are essential for trustworthy results.
+
+---
+
+## 19. References
+
+- [GitHub REST API](https://docs.github.com/en/rest/issues/issues)
+- [HTTPX](https://www.python-httpx.org/)
+- [Scikit-learn](https://scikit-learn.org/)
+- [Sentence Transformers](https://www.sbert.net/)
+- [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
+- [ChromaDB](https://docs.trychroma.com/)
+- [Google Gemini API](https://ai.google.dev/gemini-api/docs)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Streamlit](https://docs.streamlit.io/)
+- [pytest](https://docs.pytest.org/)
+
+---
+
+**IssuePilot AI — A practical AI engineering project combining information retrieval, RAG, API development, and interactive web applications**
+
+# 🔎 IssuePilot AI
+
+**GitHub Issue Retrieval & RAG Assistant**
+
+IssuePilot AI is an AI engineering portfolio project that helps developers search for related GitHub issues and investigate technical problems using Retrieval-Augmented Generation (RAG).
+
+The system combines **TF-IDF keyword search**, **Sentence Transformer embeddings**, **ChromaDB vector search**, and **Google Gemini** to generate technical investigation suggestions grounded in real GitHub issue reports.
+
+It also provides a **FastAPI backend** and an interactive **Streamlit web interface**.
+
+**Repository:** https://github.com/Minh-Canh33/issuepilot-ai
+
+---
+
+## 1. Project Overview
+
+### Problem
+
+When developers encounter a bug, they often search GitHub for similar issues.
+
+However, traditional keyword-based search has limitations:
+
+- Different developers may describe the same problem using different terminology.
+- Exact keyword matches do not always indicate the same underlying bug.
+- Searching through many issues can be time-consuming.
+- Relevant information may be buried inside issue descriptions.
+
+### Solution
+
+IssuePilot AI combines lexical and semantic retrieval with an LLM-powered assistant.
+
+The system can:
+
+- Collect and normalize real GitHub issues.
+- Search using TF-IDF and semantic embeddings.
+- Retrieve potentially relevant historical issues.
+- Generate AI-assisted investigation suggestions.
+- Provide links to supporting GitHub issues.
+- Expose functionality through a REST API.
+- Offer a web interface for interactive use.
+
+**Important:** IssuePilot AI is an investigation assistant, not an automated bug fixer. AI-generated suggestions must be independently verified.
+
+---
+
+## 2. System Architecture
+
+```text
+                   GitHub REST API
+                          |
+                          v
+                 Issue Collection
+                          |
+                          v
+                 Data Processing
+                          |
+                          v
+                  JSONL Dataset
+                    300 Issues
+                          |
+               +----------+----------+
+               |                     |
+               v                     v
+         TF-IDF Search        Semantic Search
+          scikit-learn        Sentence Transformers
+               |                     |
+               |                 Embeddings
+               |                     |
+               |                     v
+               |                  ChromaDB
+               |                     |
+               +----------+----------+
+                          |
+                          v
+                  Top-K Related Issues
+                          |
+                          v
+                RAG Context Builder
+                Title + Body + URL
+                          |
+                          v
+                     Gemini API
+                          |
+                          v
+               Evidence-Grounded Answer
+                          |
+                          v
+                    FastAPI Backend
+                          |
+                          v
+                   Streamlit Web UI
+                          |
+                          v
+                   End User
+```
+
+The TF-IDF and dense retrieval methods can be benchmarked independently. The current RAG assistant uses dense retrieval to supply context to Gemini.
+
+---
+
+## 3. Technology Stack
+
+| Component               | Technology                          |
+| ----------------------- | ----------------------------------- |
+| Programming language    | Python 3.11                         |
+| Data collection         | GitHub REST API, HTTPX              |
+| Data processing         | pandas, JSONL                       |
+| Keyword retrieval       | scikit-learn, TF-IDF                |
+| Semantic embeddings     | Sentence Transformers               |
+| Embedding model         | `all-MiniLM-L6-v2`                |
+| Vector database         | ChromaDB                            |
+| LLM                     | Google Gemini API                   |
+| Backend                 | FastAPI, Uvicorn                    |
+| Frontend                | Streamlit                           |
+| Evaluation              | Recall@5, MRR@10, latency           |
+| Testing                 | pytest, FastAPI TestClient          |
+| Development environment | Windows, Python virtual environment |
+| Version control         | Git, GitHub                         |
+
+The application supports CPU-only execution.
+
+---
+
+## 4. Dataset
+
+The dataset contains **300 public GitHub issues** collected from the `psf/requests` repository.
+
+### Dataset Statistic
+
 # IssuePilot AI
 
 **GitHub Issue Retrieval & RAG Assistant**
